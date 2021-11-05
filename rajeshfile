@@ -1,0 +1,42 @@
+pipeline {
+    agent any
+    stages{
+        stage ("Git Checkout"){
+            steps{
+                git 'https://github.com/nunnarajesh/docker-mongo-demo.git'
+            }
+        }
+        stage ("Maven Build"){
+            steps{
+            sh 'mvn clean install package'
+            }
+        } 
+        stage ("Build Docker Image"){
+            steps{
+           sh 'docker build . -t nunnarajesh/nunna:tomcat'
+            }
+        }
+        stage ("Push Docker Image"){
+            steps{
+            withCredentials([string(credentialsId: 'docker', variable: 'dockerhubpwd')]) {
+             sh "docker login -u nunnarajesh -p ${dockerhubpwd}"
+        }    
+            sh 'docker push nunnarajesh/nunna:tomcat'
+            }
+        }
+          stage ('Deploy to K8s'){
+            steps{
+                sshagent(['kubernets']) {
+                    sh "ssh -o StrictHostKeyChecking=no centos@172.31.20.0"
+                    script{
+                        try{
+                           sh "ssh centos@172.31.20.0 kubectl apply -f tomcat.yml"   
+                        }catch (error){
+                           sh "ssh centos@172.31.20.0 kubectl create -f tomcat.yml"
+                        }
+                     }
+                   }
+               }
+            }
+         }
+      }
